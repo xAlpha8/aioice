@@ -15,6 +15,8 @@ import ifaddr
 from . import mdns, stun, turn
 from .candidate import Candidate, candidate_foundation, candidate_priority
 from .utils import random_string
+import errno
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -447,6 +449,7 @@ class Connection:
             addresses = get_host_addresses(
                 use_ipv4=self._use_ipv4, use_ipv6=self._use_ipv6
             )
+            self.__log_debug(f"gather local candidates for addresses : [{','.join(addresses)}]")
             coros = [
                 self.get_component_candidates(component=component, addresses=addresses)
                 for component in self._components
@@ -876,6 +879,36 @@ class Connection:
             if pair.protocol == protocol and pair.remote_candidate == remote_candidate:
                 return pair
         return None
+    
+    async def create_datagram_endpoint_with_port_range(self, protocol_factory, local_addr=None):
+        """
+        Creates a datagram endpoint with a port within the specified range.
+        
+        :param protocol_factory: The factory function used to create the protocol instance.
+        :param local_addr: The local address to bind to, with an optional port. If the port is not specified, one will be chosen from the range.
+        :param min_port: Minimum port number to use.
+        :param max_port: Maximum port number to use.
+        :return: The transport and protocol instances.
+        """
+        min_port = int(os.getenv('NOMAD_PORT_webrtc_min', 32768))
+        max_port = int(os.getenv('NOMAD_PORT_webrtc_max', 60999))
+        self.__log_debug(f"Port range for datagram endpoints: {min_port} - {max_port}")
+        
+        loop = asyncio.get_event_loop()
+        for port in range(min_port, max_port + 1):
+            try:
+                if local_addr:
+                    local_addr_with_port = (local_addr[0], port)
+                else:
+                    local_addr_with_port = ('', port)
+                return await loop.create_datagram_endpoint(protocol_factory, local_addr=local_addr_with_port)
+            except OSError as e:
+                if e.errno == errno.EADDRINUSE:
+                    continue  # This port is already in use, try the next one
+                else:
+                    raise e # Reraise any other OSError that isn't related to the port being in use
+        raise RuntimeError(f"Could not bind to any port in the range {min_port}-{max_port}")
+
 
     async def get_component_candidates(
         self, component: int, addresses: List[str], timeout: int = 5
@@ -888,10 +921,12 @@ class Connection:
         for address in addresses:
             # create transport
             try:
-                transport, protocol = await loop.create_datagram_endpoint(
+                transport, protocol = await self.create_datagram_endpoint_with_port_range(
                     lambda: StunProtocol(self), local_addr=(address, 0)
                 )
                 sock = transport.get_extra_info("socket")
+                port = transport.get_extra_info('sockname')
+                self.__log_debug(f"Bound socket {sock} for {address}:{port}")
                 if sock is not None:
                     sock.setsockopt(
                         socket.SOL_SOCKET, socket.SO_RCVBUF, turn.UDP_SOCKET_BUFFER_SIZE
@@ -1112,6 +1147,9 @@ class Connection:
 
     def __log_info(self, msg: str, *args) -> None:
         logger.info("%s " + msg, self, *args)
+
+    def __log_debug(self, msg: str, *args) -> None:
+        logger.debug("%s " + msg, self, *args)
 
     def __repr__(self) -> str:
         return "Connection(%s)" % self._id

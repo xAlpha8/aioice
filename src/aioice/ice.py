@@ -890,8 +890,8 @@ class Connection:
         :param max_port: Maximum port number to use.
         :return: The transport and protocol instances.
         """
-        min_port = int(os.getenv('NOMAD_PORT_webrtc_min', 32768))
-        max_port = int(os.getenv('NOMAD_PORT_webrtc_max', 60999))
+        min_port = int(os.getenv('UDP_PORT_RANGE_START', 32768))
+        max_port = int(os.getenv('UDP_PORT_RANGE_STOP', 60999))
         self.__log_debug(f"Port range for datagram endpoints: {min_port} - {max_port}")
         
         loop = asyncio.get_event_loop()

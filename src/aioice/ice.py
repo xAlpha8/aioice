@@ -879,7 +879,7 @@ class Connection:
             if pair.protocol == protocol and pair.remote_candidate == remote_candidate:
                 return pair
         return None
-    
+
     async def create_datagram_endpoint_with_port_range(self, protocol_factory, local_addr=None):
         """
         Creates a datagram endpoint with a port within the specified range.
@@ -893,15 +893,20 @@ class Connection:
         min_port = int(os.getenv('UDP_PORT_RANGE_START', 32768))
         max_port = int(os.getenv('UDP_PORT_RANGE_STOP', 60999))
         self.__log_debug(f"Port range for datagram endpoints: {min_port} - {max_port}")
-        
+
         loop = asyncio.get_event_loop()
         for port in range(min_port, max_port + 1):
             try:
-                if local_addr:
-                    local_addr_with_port = (local_addr[0], port)
-                else:
-                    local_addr_with_port = ('', port)
-                return await loop.create_datagram_endpoint(protocol_factory, local_addr=local_addr_with_port)
+                # if local_addr:
+                #     # local_addr_with_port = (local_addr[0], port)
+                #     local_addr_with_port = ("", port)
+                # else:
+                #     local_addr_with_port = ('', port)
+                # fly.io docs: https://fly.io/docs/networking/udp-and-tcp/
+                local_addr_with_port = ("fly-global-services", port)
+                return await loop.create_datagram_endpoint(
+                    protocol_factory, local_addr=local_addr_with_port
+                )
             except OSError as e:
                 if e.errno == errno.EADDRINUSE:
                     continue  # This port is already in use, try the next one

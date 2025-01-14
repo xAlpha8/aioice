@@ -895,7 +895,7 @@ class Connection:
         self.__log_debug(f"Port range for datagram endpoints: {min_port} - {max_port}")
 
         loop = asyncio.get_event_loop()
-        local_addr_with_port = ("fly-global-services", 5000)
+        local_addr_with_port = ("fly-global-services", 8080)
         return await loop.create_datagram_endpoint(
             protocol_factory, local_addr=local_addr_with_port
         )
